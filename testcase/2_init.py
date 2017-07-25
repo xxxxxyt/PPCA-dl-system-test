@@ -7,8 +7,8 @@ import numpy as np
 sess = tf.Session()
 
 # linear model
-W = tf.Variable([.5], dtype=tf.float32)
-b = tf.Variable([1.5], dtype=tf.float32)
+W = tf.Variable([.5], dtype=tf.float32, name = "W")
+b = tf.Variable([1.5], dtype=tf.float32, name = "b")
 x = tf.placeholder(tf.float32)
 
 linear_model = W * x + b

@@ -7,6 +7,34 @@
 /* TODO: Your code here */
 /* all your GPU kernel code, e.g. matrix_softmax_cross_entropy_kernel */
 
+__global__ void assign_kernel(int n, const float *input, float *output) {
+    
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+    output[idx] = input[idx];
+}
+
+int DLGpuAssign(const DLArrayHandle input, DLArrayHandle output) {
+    
+    int n = 1;
+    assert(input->ndim == output->ndim);
+    for (int i = 0; i < input->ndim; ++i) {
+        assert(input->shape[i] == output->shape[i]);
+        n *= input->shape[i];
+    }
+    
+    int threads = 0;
+    if (n <= 1024) threads = n;
+    else threads = 1024;
+    int blocks = (n + 1023) / 1024;
+    
+    const float *input_data = (const float *)input->data;
+    float *output_data = (float *)output->data;
+    
+    assign_kernel<<<blocks, threads>>>(n, input_data, output_data);
+    return 0;
+}
+    
 __global__ void array_set_kernel(int n, float *arr, float value) {
     
     int idx = blockIdx.x * blockDim.x + threadIdx.x;

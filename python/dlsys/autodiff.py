@@ -1,124 +1,157 @@
-""" library to take autodiff and execute a computation graph """
 from __future__ import absolute_import
 
+import copy
 import numpy as np
 from . import ndarray, gpu_op
 
 class Node(object):
-    """Node in a computation graph."""
     def __init__(self):
-        """Constructor, new node is indirectly created by Op object call method.
-
-            Instance variables
-            ------------------
-            self.inputs: the list of input nodes.
-            self.op: the associated op object,
-                e.g. add_op if this node is created by adding two other nodes.
-            self.const_attr: the add or multiply constant.
-                e.g. self.const_attr=5 if this node is created by x+5.
-            self.name: node name for debugging.
-        """
+        self.name = ""
         self.inputs = []
         self.op = None
+        # for viriable
+        self.value = None
+        # for assign
+        self.assign_to = None
+        # for const
         self.const_attr = None
-        self.name = ""
-
+    def __neg__(self):
+        new_node = neg_op(self)
+        return new_node
     def __add__(self, other):
-        """Adding two nodes return a new node."""
-        if isinstance(other, Node):
-            new_node = add_op(self, other)
-        else:
-            # Add by a constant stores the constant in new node's const_attr
-            # 'other' argument is a constant
-            new_node = add_byconst_op(self, other)
+        if not isinstance(other, Node):
+            other = constant_op(other)
+        new_node = add_op(self, other)
         return new_node
-
     def __mul__(self, other):
-        """Multiplying two nodes return a new node."""
-        if isinstance(other, Node):
-            new_node = mul_op(self, other)
-        else:
-            # Mul by a constant stores the constant in new node's const_attr
-            # 'other' argument is a constant
-            new_node = mul_byconst_op(self, other)
+        if not isinstance(other, Node):
+            other = constant_op(other)
+        new_node = mul_op(self, other)
         return new_node
-
-    # Allow left-hand-side add and multiply.
+    def __sub__(self, other):
+        return self + (-other)
     __radd__ = __add__
     __rmul__ = __mul__
-
+    __rsub__ = __sub__
     def __str__(self):
-        """Allow print to display node name."""
         return self.name
-
-
-def Variable(name):
-    """User defined variables in an expression.
-        e.g. x = Variable(name = "x")
-    """
-    placeholder_node = placeholder_op()
-    placeholder_node.name = name
-    return placeholder_node
 
 
 class Op(object):
     """Op represents operations performed on nodes."""
     def __call__(self):
-        """Create a new node and associate the op object with the node.
-
-        Returns
-        -------
-        The new node object.
-        """
         new_node = Node()
         new_node.op = self
         return new_node
-
     def compute(self, node, input_vals, output_val, use_numpy=True):
-        """Given values of input nodes, compute the output value.
-
-        Parameters
-        ----------
-        node: node that performs the compute.
-        input_vals: values of input nodes.
-        output_val: output value of the node, modified in-place.
-        use_numpy: bool flag whether to use numpy for compute
-        """
         raise NotImplementedError
-
     def gradient(self, node, output_grad):
-        """Given output gradient, compute partial gradient to each input node.
-
-        Parameters
-        ----------
-        node: node that performs the gradient.
-        output_grad: output gradient summed from children nodes' contributions
-
-        Returns
-        -------
-        A list of gradient contributions to each input node respectively.
-        """
         raise NotImplementedError
-
     def infer_shape(self, node, input_shapes):
-        """Given shapes of input nodes, compute shape of output node.
-
-        Implementation note:
-        It's simpler to treat shape of constants as (1,), so that constants can
-        be stored as a numpy array too and you would need fewer special case
-        handling.
-
-        Parameters
-        ----------
-        node: node whose shape is being inferred.
-        input_vals: shapes of input nodes.
-
-        Returns
-        -------
-        A tuple representing the shape of output node.
-        """
         raise NotImplementedError
 
+        
+class PlaceholderOp(Op):
+    def __call__(self, name = ""):
+        new_node = Op.__call__(self)
+        new_node.name = name
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy=True):
+        assert False, "placeholder %s values provided by feed_dict" % node.name
+    def gradient(self, node, output_grad):
+        return None
+    def infer_shape(self, node, input_shapes):
+        assert False, "placeholder %s shape provided by feed_shape" % node.name
+
+        
+class VariableOp(Op):
+    def __call__(self, name = ""):
+        new_node = Op.__call__(self)
+        new_node.name = name
+        new_node.value = None
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 0
+        assert node.value is not None
+        output_val[:] = node.value
+    def gradient(self, node, output_grad):
+        return None
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 0
+        assert node.value is not None
+        return node.value.shape
+        
+        
+class ConstantOp(Op):
+    def __call__(self, const_val):
+        if not isinstance(const_val, np.ndarray):
+            const_val = np.array(const_val)
+        new_node = Op.__call__(self)
+        new_node.name = str(const_val)
+        new_node.const_attr = copy.deepcopy(const_val)
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 0
+        assert node.const_attr is not None
+        output_val[:] = node.const_attr
+    def gradient(self, node, output_grad):
+        return None
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 0
+        assert node.const_attr is not None
+        return node.const_attr.shape
+    
+        
+class InitOp(Op):
+    def __call__(self, input_nodes):
+        new_node = Op.__call__(self)
+        new_node.name = "(init node)"
+        new_node.inputs = input_nodes
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        output_val = None
+    def gradient(self, node, output_grad):
+        assert False, "no gradient for init node"
+    def infer_shape(self, node, input_shapes):
+        return ()
+
+class AssignOp(Op):
+    def __call__(self, assign_node, input):
+        if not isinstance(input, Node):
+            input_node = constant_op(input)
+        else:
+            input_node = input
+            
+        new_node = Op.__call__(self)
+        new_node.inputs = [input_node]
+        new_node.assign_to = assign_node
+        new_node.name = "(%s=%s)" % (assign_node.name, input_node.name)
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 1
+        node.assign_to.value = copy.deepcopy(input_vals[0])
+        output_val = None
+    def gradient(self, node, output_grad):
+        assert False, "no gradient for assign node"
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 1
+        return ()
+
+        
+class NegOp(Op):
+    def __call__(self, node):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node]
+        new_node.name = "(-%s)" % node.name
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 1
+        output_val[:] = -input_vals[0]
+    def gradient(self, node, output_grad):
+        return [-output_grad]
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 1
+        return input_shapes[0]
 
 class AddOp(Op):
     def __call__(self, node_A, node_B):
@@ -189,7 +222,6 @@ class AddByConstOp(Op):
         """TODO: Your code here"""
         assert len(input_shapes) == 1
         return input_shape[0]
-
 
 class MulOp(Op):
     def __call__(self, node_A, node_B):
@@ -343,22 +375,6 @@ class MatMulOp(Op):
         if output_shape[1] == 1:
             output_shape = (output_shape[0],)
         return output_shape
-
-
-class PlaceholderOp(Op):
-    def __call__(self):
-        """Creates a variable node."""
-        new_node = Op.__call__(self)
-        return new_node
-
-    def compute(self, node, input_vals, output_val, use_numpy=True):
-        assert False, "placeholder %s values provided by feed_dict" % node.name
-
-    def gradient(self, node, output_grad):
-        return None
-
-    def infer_shape(self, node, input_shapes):
-        assert False, "placeholder %s shape provided by feed_shape" % node.name
 
 
 class ZerosLikeOp(Op):
@@ -597,14 +613,23 @@ class ReluGradientOp(Op):
 
 
 # Create global singletons of operators.
+placeholder_op = PlaceholderOp()
+variable_op = VariableOp()
+constant_op = ConstantOp()
+
+init_op = InitOp()
+assign_op = AssignOp()
+
+neg_op = NegOp()
 add_op = AddOp()
 mul_op = MulOp()
 add_byconst_op = AddByConstOp()
 mul_byconst_op = MulByConstOp()
 matmul_op = MatMulOp()
-placeholder_op = PlaceholderOp()
+
 oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
+
 reducesumaxiszero_op = ReduceSumAxisZeroOp()
 broadcastto_op = BroadcastToOp()
 softmaxcrossentropy_op = SoftmaxCrossEntropyOp()
@@ -612,7 +637,7 @@ softmax_op = SoftmaxOp()
 relu_op = ReluOp()
 relu_gradient_op = ReluGradientOp()
 
-
+    
 class Executor(object):
     """Executor computes values for given set of nodes in computation graph."""
     def __init__(self, eval_node_list, ctx=None):

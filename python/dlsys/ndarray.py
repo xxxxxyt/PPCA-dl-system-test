@@ -192,8 +192,7 @@ def array(arr, ctx=cpu(0)):
     ret : NDArray
         The created array
     """
-    if not isinstance(arr, np.ndarray):
-        arr = np.array(arr)
+    assert isinstance(arr, np.ndarray)
     ret = empty(arr.shape, ctx)
     ret._sync_copyfrom(arr)
     return ret

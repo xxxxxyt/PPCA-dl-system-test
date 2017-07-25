@@ -4,6 +4,10 @@ import ctypes
 from ._base import _LIB
 from . import ndarray as _nd
 
+def assign(in_arr, out_arr):
+    assert isinstance(in_arr, _nd.NDArray)
+    assert isinstance(out_arr, _nd.NDArray)
+    _LIB.DLGpuAssign(in_arr.handle, out_arr.handle)
 
 def array_set(arr, value):
     assert isinstance(arr, _nd.NDArray)

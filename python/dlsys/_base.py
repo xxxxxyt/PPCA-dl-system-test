@@ -5,15 +5,19 @@ from __future__ import absolute_import
 
 import os
 import ctypes
+import numpy as np
 
+float32 = np.float32
 
 def _load_lib():
     """Load libary in build/lib."""
+    """
     curr_path = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
     lib_path = os.path.join(curr_path, '../../build/lib/')
     path_to_so_file = os.path.join(lib_path, "libc_runtime_api.so")
     lib = ctypes.CDLL(path_to_so_file, ctypes.RTLD_GLOBAL)
     return lib
+    """
 
 
 # global library instance
@@ -55,3 +59,6 @@ def c_array(ctype, values):
         Created ctypes array
     """
     return (ctype * len(values))(*values)
+
+########################################################
+    
