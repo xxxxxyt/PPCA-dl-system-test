@@ -23,7 +23,6 @@ def _load_lib():
 # global library instance
 _LIB = _load_lib()
 
-
 ##################
 # Helper Methods #
 ##################

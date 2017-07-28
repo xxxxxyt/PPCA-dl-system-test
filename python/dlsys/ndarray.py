@@ -196,6 +196,15 @@ def array(arr, ctx=cpu(0)):
     ret = empty(arr.shape, ctx)
     ret._sync_copyfrom(arr)
     return ret
+    
+def cast_to_ndarray(arr):
+    if isinstance(arr, np.ndarray):
+        return arr
+    if isinstance(arr, NDArray):
+        assert False, "already been NDArray when cast to ndarray"
+    if not isinstance(arr, list):
+        arr = [arr]
+    return np.array(arr)
 
 
 def empty(shape, ctx=cpu(0)):
