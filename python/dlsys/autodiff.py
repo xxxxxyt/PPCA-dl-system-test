@@ -284,7 +284,8 @@ class AddOp(Op):
                 input_vals[0], input_vals[1], output_val)
 
     def gradient(self, node, output_grad):
-        return [output_grad, output_grad]
+        return [reducesumto_op(output_grad, node.inputs[0]), 
+                reducesumto_op(output_grad, node.inputs[1])]
 
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 2
@@ -308,7 +309,8 @@ class MulOp(Op):
                 input_vals[0], input_vals[1], output_val)
                 
     def gradient(self, node, output_grad):
-        return [node.inputs[1] * output_grad, node.inputs[0] * output_grad]
+        return [reducesumto_op(node.inputs[1] * output_grad, node.inputs[0]), 
+                reducesumto_op(node.inputs[0] * output_grad, node.inputs[1])]
 
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 2
@@ -454,7 +456,7 @@ class OnesLikeOp(Op):
 
 
 class ReduceSumOp(Op):
-    def __call__(self, node_A, reduction_indices = 0, keepdims = True):
+    def __call__(self, node_A, reduction_indices = 0, keepdims = False):
         assert isinstance(reduction_indices, int)
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
@@ -496,6 +498,35 @@ class ReduceSumOp(Op):
             output_shape = (1,)
         return output_shape
 
+        
+class ReduceSumToOp(Op):
+    def __call__(self, node_A, node_B):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "ReduceSumTo(%s,%s.shape)" % (node_A.name, node_B.name)
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy=True):
+        assert len(input_vals) == 2
+        tmp = copy.deepcopy(input_vals[0])
+        input_shape = input_vals[0].shape
+        output_shape = input_vals[1].shape
+        for i in range(len(output_shape)):
+            while(i < len(tmp.shape) and 
+                tmp.shape[i] != output_shape[i]):
+                tmp = copy.deepcopy(np.sum(tmp, axis = i))
+        while len(tmp.shape) < len(output_shape):
+            tmp = tmp.reshape(tmp.shape + (1,))
+        output_val[:] = tmp
+        assert output_val.shape == output_shape
+
+    def gradient(self, node, output_grad):
+        grad_A = broadcastto_op(output_grad, node.inputs[0])
+        grad_B = zeroslike_op(node.inputs[1])
+        return [grad_A, grad_B]
+
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
+        return input_shapes[1]
 
 class BroadcastToOp(Op):
     def __call__(self, node_A, node_B):
@@ -510,12 +541,18 @@ class BroadcastToOp(Op):
     def compute(self, node, input_vals, output_val, use_numpy=True):
         assert len(input_vals) == 2
         if use_numpy:
-            output_val[:] = np.broadcast_to(input_vals[0], input_vals[1].shape)
+            tmp = copy.deepcopy(input_vals[0])
+            input_shape = tmp.shape
+            output_shape = input_vals[1].shape
+            for i in range(len(output_shape) - len(input_shape)):
+                input_shape = input_shape + (1,)
+            tmp = tmp.reshape(input_shape)
+            output_val[:] = np.broadcast_to(tmp, output_shape)
         else:
             gpu_op.broadcast_to(input_vals[0], output_val)
 
     def gradient(self, node, output_grad):
-        grad_A = reducesum_op(output_grad, keepdims = True)
+        grad_A = reducesumto_op(output_grad, node.inputs[0])
         grad_B = zeroslike_op(node.inputs[1])
         return [grad_A, grad_B]
 
@@ -654,6 +691,7 @@ oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
 
 reducesum_op = ReduceSumOp()
+reducesumto_op = ReduceSumToOp()
 broadcastto_op = BroadcastToOp()
 softmaxcrossentropy_op = SoftmaxCrossEntropyOp()
 softmax_op = SoftmaxOp()
