@@ -20,6 +20,12 @@ def Variable(init = None, dtype = float32, name = ""):
         _all_variable_inits.append(autodiff.assign_op(v, c))
     return v
     
+def sqrt(input):
+    return autodiff.power_op(input, 0.5)
+    
+def power(node_A, node_B):
+    return autodiff.power_op(node_A, node_B)
+    
 def log(input):
     return autodiff.log_op(input)
 

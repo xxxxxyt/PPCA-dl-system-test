@@ -24,6 +24,9 @@ class Session(object):
             
         executor = autodiff.Executor(fetch)
         res = executor.run(feed_dict)
+        for i in range(len(res)):
+            if res[i].shape == (1,):
+                res[i] = res[i][0]
         if len(res) == 1:
             return res[0]
         else:

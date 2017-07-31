@@ -168,12 +168,12 @@ class AssignOp(Op):
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
         node.assign_to.value = copy.deepcopy(input_vals[0])
-        output_val = None
+        output_val = input_vals[0]
     def gradient(self, node, output_grad):
         assert False, "no gradient for assign node"
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 1
-        return ()
+        return input_shapes[0]
         
         
 class EqualOp(Op):
@@ -210,6 +210,29 @@ class ArgmaxOp(Op):
         node.keepdims = False
         return reducesum_op.infer_shape(node, input_shapes)
 
+        
+class PowerOp(Op):
+    def __call__(self, node_A, node_B):
+        if not isinstance(node_A, Node):
+            node_A = constant_op(node_A)
+        if not isinstance(node_B, Node):
+            node_B = constant_op(node_B)
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "(%s^%s)" % (node_A.name, node_B.name)
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 2
+        output_val[:] = input_vals[0] ** input_vals[1]
+    def gradient(self, node, output_grad):
+        assert False
+        return [node.inputs[1] * node / node.inputs[0],
+                log_op(node.inputs[0]) * node]
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
+        assert input_shapes[1] == (1,)
+        return input_shapes[0]
+        
         
 class ExpOp(Op):
     def __call__(self, node):
@@ -612,6 +635,7 @@ assign_op = AssignOp()
 equal_op = EqualOp()
 argmax_op = ArgmaxOp()
 
+power_op = PowerOp()
 exp_op = ExpOp()
 log_op = LogOp()
 neg_op = NegOp()
