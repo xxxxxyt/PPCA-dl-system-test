@@ -5,9 +5,13 @@ import numpy as np
 # global list of all variable initializers
 _all_variable_inits = []
 
+def constant(init, shape):
+    x = np.zeros(shape)
+    x[:] = init
+    return x
+
 def placeholder(dtype = float32, shape = None, name = ""):
-    v = autodiff.placeholder_op(name = name)
-    return v
+    return autodiff.placeholder_op(name = name)
 
 def Variable(init = None, dtype = float32, name = ""):
     v = autodiff.variable_op(name = name)
@@ -20,26 +24,26 @@ def Variable(init = None, dtype = float32, name = ""):
         _all_variable_inits.append(autodiff.assign_op(v, c))
     return v
     
-def sqrt(input):
-    return autodiff.power_op(input, 0.5)
+def sqrt(node):
+    return autodiff.power_op(node, 0.5)
     
 def power(node_A, node_B):
     return autodiff.power_op(node_A, node_B)
     
-def log(input):
-    return autodiff.log_op(input)
+def log(node):
+    return autodiff.log_op(node)
 
-def matmul(matA, matB):
-    return autodiff.matmul_op(matA, matB)
+def matmul(node_A, node_B):
+    return autodiff.matmul_op(node_A, node_B)
     
-def reduce_sum(input, reduction_indices = None):
+def reduce_sum(node, reduction_indices = None):
     if not isinstance(reduction_indices, list):
         reduction_indices = [0]
     assert len(reduction_indices) == 1
-    return autodiff.reducesum_op(input, reduction_indices[0])
+    return autodiff.reducesum_op(node, reduction_indices[0])
     
-def reduce_mean(input, reduction_indices = None):
-    return reduce_sum(input, reduction_indices) / autodiff.shape_op(input, 
+def reduce_mean(node, reduction_indices = None):
+    return reduce_sum(node, reduction_indices) / autodiff.shape_op(node, 
         reduction_indices)
     
 def zeros(shape):
@@ -73,3 +77,6 @@ def gradients(output_node, node_list):
     
 def random_normal(shape, mean = 0.0, stddev = 1.0):
     return np.random.normal(loc = mean, scale = stddev, size = shape)
+
+def reshape(node, shape):
+    return autodiff.reshape_op(node, shape)

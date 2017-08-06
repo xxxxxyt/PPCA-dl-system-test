@@ -16,7 +16,6 @@ class GradientDescentOptimizer:
             if isinstance(node.op, autodiff.VariableOp):
                 para.append(node)
         grad = gradients(node, para)
-        
         assign_nodes = []
         for i in range(len(para)):
             assign_nodes.append(assign(para[i], 

@@ -2,7 +2,8 @@ from __future__ import absolute_import
 
 import copy
 import numpy as np
-from . import ndarray, gpu_op
+from . import ndarray
+from math import ceil
 
 class Node(object):
     def __init__(self):
@@ -45,6 +46,8 @@ class Node(object):
         from .session import Session
         sess = Session()
         return sess.run(self, feed_dict)
+    def run(self, feed_dict):
+        return self.eval(feed_dict)
 
 class Op(object):
     """Op represents operations performed on nodes."""
@@ -52,7 +55,7 @@ class Op(object):
         new_node = Node()
         new_node.op = self
         return new_node
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         raise NotImplementedError
     def gradient(self, node, output_grad):
         raise NotImplementedError
@@ -65,7 +68,7 @@ class PlaceholderOp(Op):
         new_node = Op.__call__(self)
         new_node.name = name
         return new_node
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert False, "placeholder %s values provided by feed_dict" % node.name
     def gradient(self, node, output_grad):
         return None
@@ -102,10 +105,7 @@ class ConstantOp(Op):
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 0
         assert node.const_attr is not None
-        if use_numpy:
-            output_val[:] = node.const_attr
-        else:
-            const_attr = ndarray.array(node.const_attr)
+        output_val[:] = node.const_attr
             
     def gradient(self, node, output_grad):
         return None
@@ -151,6 +151,51 @@ class ShapeOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 1
         return (1,)
+        
+        
+class ReshapeOp(Op):
+    def __call__(self, node, shape):
+        new_node = Op.__call__(self)
+        new_node.name = "reshape(%s,%s)" % (node.name, str(shape))
+        new_node.inputs = [node]
+        new_node.to_shape = shape
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 1
+        output_val[:] = input_vals[0].reshape(node.to_shape)
+    def gradient(self, node, output_grad):
+        return [reshapeto_op(output_grad, node.inputs[0])]
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 1
+        t = 1
+        for i in range(len(input_shapes[0])):
+            t *= input_shapes[0][i]
+        output_shape = copy.deepcopy(node.to_shape)
+        for i in range(len(output_shape)):
+            if output_shape[i] != -1:
+                assert t % output_shape[i] == 0
+                t /= output_shape[i]
+        for i in range(len(output_shape)):
+            if output_shape[i] == -1:
+                output_shape[i] = t
+        return output_shape
+        
+        
+class ReshapeToOp(Op):
+    def __call__(self, node_A, node_B):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "reshapeto(%s,%s)" % (node_A.name, node_B.name)
+        return new_node
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 2
+        output_val[:] = input_vals[0].reshape(input_vals[1].shape)
+    def gradient(self, node, output_grad):
+        return [reshapeto_op(output_grad, node.inputs[0])]
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
+        return input_shapes[1]
+        
 
 class AssignOp(Op):
     def __call__(self, assign_node, input):
@@ -168,7 +213,7 @@ class AssignOp(Op):
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
         node.assign_to.value = copy.deepcopy(input_vals[0])
-        output_val = input_vals[0]
+        output_val[:] = input_vals[0]
     def gradient(self, node, output_grad):
         assert False, "no gradient for assign node"
     def infer_shape(self, node, input_shapes):
@@ -249,6 +294,7 @@ class ExpOp(Op):
         assert len(input_shapes) == 1
         return input_shapes[0]
         
+        
 class LogOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
@@ -263,6 +309,7 @@ class LogOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 1
         return input_shapes[0]
+        
         
 class NegOp(Op):
     def __call__(self, node):
@@ -279,6 +326,7 @@ class NegOp(Op):
         assert len(input_shapes) == 1
         return input_shapes[0]
         
+        
 class InvOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
@@ -293,7 +341,8 @@ class InvOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 1
         return input_shapes[0]
-
+        
+        
 class AddOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
@@ -301,7 +350,7 @@ class AddOp(Op):
         new_node.name = "(%s+%s)" % (node_A.name, node_B.name)
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
         output_val[:] = input_vals[0] + input_vals[1]
 
@@ -321,7 +370,7 @@ class MulOp(Op):
         new_node.name = "(%s*%s)" % (node_A.name, node_B.name)
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
         output_val[:] = input_vals[0] * input_vals[1]
                 
@@ -344,28 +393,22 @@ class MatMulOp(Op):
             node_A.name, node_B.name, str(trans_A), str(trans_B))
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
-        if use_numpy:
-            if ((node.matmul_attr_trans_A is False) and
-                    (node.matmul_attr_trans_B is False)):
-                output_val[:] = np.matmul(input_vals[0], input_vals[1])
-            elif ((node.matmul_attr_trans_A is True) and
-                    (node.matmul_attr_trans_B is False)):
-                output_val[:] = np.matmul(
-                    np.transpose(input_vals[0]), input_vals[1])
-            elif ((node.matmul_attr_trans_A is False) and
-                    (node.matmul_attr_trans_B is True)):
-                output_val[:] = np.matmul(
-                    input_vals[0], np.transpose(input_vals[1]))
-            elif ((node.matmul_attr_trans_A is True) and
-                    (node.matmul_attr_trans_B is True)):
-                output_val[:] = np.matmul(
-                    np.transpose(input_vals[0]), np.transpose(input_vals[1]))
-        else:
-            gpu_op.matrix_multiply(
-                input_vals[0], node.matmul_attr_trans_A,
-                input_vals[1], node.matmul_attr_trans_B,
-                output_val)
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        if ((node.matmul_attr_trans_A is False) and
+                (node.matmul_attr_trans_B is False)):
+            output_val[:] = np.matmul(input_vals[0], input_vals[1])
+        elif ((node.matmul_attr_trans_A is True) and
+                (node.matmul_attr_trans_B is False)):
+            output_val[:] = np.matmul(
+                np.transpose(input_vals[0]), input_vals[1])
+        elif ((node.matmul_attr_trans_A is False) and
+                (node.matmul_attr_trans_B is True)):
+            output_val[:] = np.matmul(
+                input_vals[0], np.transpose(input_vals[1]))
+        elif ((node.matmul_attr_trans_A is True) and
+                (node.matmul_attr_trans_B is True)):
+            output_val[:] = np.matmul(
+                np.transpose(input_vals[0]), np.transpose(input_vals[1]))
 
     def gradient(self, node, output_grad):
         if ((node.matmul_attr_trans_A is False) and
@@ -424,12 +467,9 @@ class ZerosLikeOp(Op):
         new_node.name = "Zeroslike(%s)" % node_A.name
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        if use_numpy:
-            output_val[:] = np.zeros(input_vals[0].shape)
-        else:
-            gpu_op.array_set(output_val, 0)
+        output_val[:] = np.zeros(input_vals[0].shape)
 
     def gradient(self, node, output_grad):
         return [zeroslike_op(node.inputs[0])]
@@ -452,12 +492,9 @@ class OnesLikeOp(Op):
         new_node.name = "Oneslike(%s)" % node_A.name
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        if use_numpy:
-            output_val[:] = np.ones(input_vals[0].shape)
-        else:
-            gpu_op.array_set(output_val, 1)
+        output_val[:] = np.ones(input_vals[0].shape)
 
     def gradient(self, node, output_grad):
         return [zeroslike_op(node.inputs[0])]
@@ -482,14 +519,11 @@ class ReduceSumOp(Op):
         new_node.keepdims = keepdims
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        if use_numpy:
-            assert(isinstance(input_vals[0], np.ndarray))
-            output_val[:] = np.sum(input_vals[0], 
-                axis = node.reduction_indices, keepdims = node.keepdims)
-        else:
-            gpu_op.reduce_sum_axis_zero(input_vals[0], output_val)
+        assert(isinstance(input_vals[0], np.ndarray))
+        output_val[:] = np.sum(input_vals[0], 
+            axis = node.reduction_indices, keepdims = node.keepdims)
 
     def gradient(self, node, output_grad):
         return [broadcastto_op(output_grad, node.inputs[0])]
@@ -522,7 +556,7 @@ class ReduceSumToOp(Op):
         new_node.inputs = [node_A, node_B]
         new_node.name = "ReduceSumTo(%s,%s.shape)" % (node_A.name, node_B.name)
         return new_node
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
         tmp = copy.deepcopy(input_vals[0])
         input_shape = input_vals[0].shape
@@ -544,7 +578,8 @@ class ReduceSumToOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 2
         return input_shapes[1]
-
+        
+        
 class BroadcastToOp(Op):
     def __call__(self, node_A, node_B):
         """Creates a node that represents np.broadcast_to(node_A, node_B.shape).
@@ -555,18 +590,15 @@ class BroadcastToOp(Op):
         new_node.name = "BroadcastTo(%s,%s.shape)" % (node_A.name, node_B.name)
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
-        if use_numpy:
-            tmp = copy.deepcopy(input_vals[0])
-            input_shape = tmp.shape
-            output_shape = input_vals[1].shape
-            for i in range(len(output_shape) - len(input_shape)):
-                input_shape = input_shape + (1,)
-            tmp = tmp.reshape(input_shape)
-            output_val[:] = np.broadcast_to(tmp, output_shape)
-        else:
-            gpu_op.broadcast_to(input_vals[0], output_val)
+        tmp = copy.deepcopy(input_vals[0])
+        input_shape = tmp.shape
+        output_shape = input_vals[1].shape
+        for i in range(len(output_shape) - len(input_shape)):
+            input_shape = input_shape + (1,)
+        tmp = tmp.reshape(input_shape)
+        output_val[:] = np.broadcast_to(tmp, output_shape)
 
     def gradient(self, node, output_grad):
         grad_A = reducesumto_op(output_grad, node.inputs[0])
@@ -585,12 +617,9 @@ class ReluOp(Op):
         new_node.name = "Relu(%s)" % (node_A.name)
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        if use_numpy:
-            output_val[:] = np.maximum(input_vals[0], 0)
-        else:
-            gpu_op.relu(input_vals[0], output_val)
+        output_val[:] = np.maximum(input_vals[0], 0)
 
     def gradient(self, node, output_grad):
         return [relu_gradient_op(node.inputs[0], output_grad)]
@@ -607,13 +636,10 @@ class ReluGradientOp(Op):
         new_node.name = "ReluGradient(%s)" % (node_A.name)
         return new_node
 
-    def compute(self, node, input_vals, output_val, use_numpy=True):
+    def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
-        if use_numpy:
-            # heaviside function, 0.5 at x=0
-            output_val[:] = (np.sign(input_vals[0]) + 1) * 0.5 * input_vals[1]
-        else:
-            gpu_op.relu_gradient(input_vals[0], input_vals[1], output_val)
+        # heaviside function, 0.5 at x=0
+        output_val[:] = (np.sign(input_vals[0]) + 1) * 0.5 * input_vals[1]
 
     def gradient(self, node, output_grad):
         raise NotImplementedError
@@ -621,6 +647,265 @@ class ReluGradientOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 2
         assert input_shapes[0] == input_shapes[1]
+        return input_shapes[0]
+        
+        
+class Conv2dOp(Op):
+    def __call__(self, input, filter, strides, padding):
+        new_node = Op.__call__(self)
+        new_node.inputs = [input, filter]
+        new_node.strides = strides
+        new_node.padding = padding
+        return new_node
+        
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 2
+        X = input_vals[0]
+        W = input_vals[1]
+        batch, in_h, in_w, in_ch = X.shape
+        fil_h, fil_w, in_ch, ou_ch = W.shape
+        batch, ou_h, ou_w, ou_ch = output_val.shape
+        strides = node.strides
+            
+        if node.padding == "SAME":
+            pad_h = (ou_h - 1) * strides[1] + fil_h - in_h
+            pad_w = (ou_w - 1) * strides[2] + fil_w - in_w
+            pad_t = node.pad_t = pad_h // 2
+            pad_b = node.pad_b = pad_h - pad_t
+            pad_l = node.pad_l = pad_w // 2
+            pad_r = node.pad_r = pad_w - pad_l
+            X = np.pad(X, ((0, 0), (pad_t, pad_b), (pad_l, pad_r), \
+                           (0, 0)), "constant")
+            _, in_h, in_w, _ = X.shape
+            
+        W_col = W.reshape((fil_h * fil_w * in_ch, ou_ch))
+        subX_col = np.zeros((ou_h * ou_w, fil_h * fil_w * in_ch))
+        for b in range(batch):
+            p = 0
+            for i in range(ou_h):
+                q = 0
+                for j in range(ou_w):
+                    subX = X[b, p : p + fil_h, q : q + fil_w, :]
+                    subX_col[i * ou_w + j, :] = \
+                        subX.reshape((1, fil_h * fil_w * in_ch))
+                    q += strides[2]
+                p += strides[1]
+            subY_col = np.matmul(subX_col, W_col)
+            output_val[b, :] = subY_col.reshape((ou_h, ou_w, ou_ch))
+        
+    def gradient(self, node, output_grad):
+        return [conv2dgradientx_op(node.inputs[0], \
+                                   node.inputs[1], output_grad, node),
+                conv2dgradientw_op(node.inputs[0], \
+                                   node.inputs[1], output_grad, node)]
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
+        batch, in_h, in_w, in_ch = input_shapes[0]
+        fil_h, fil_w, in_ch, ou_ch = input_shapes[1]
+        strides = node.strides
+        if node.padding == "VALID":
+            ou_h = ceil(1.00 * (in_h - fil_h + 1) / strides[1])
+            ou_w = ceil(1.00 * (in_w - fil_w + 1) / strides[2])
+        else:
+            ou_h = ceil(1.00 * in_h / strides[1])
+            ou_w = ceil(1.00 * in_w / strides[2])
+        return (batch, int(ou_h), int(ou_w), ou_ch)
+        
+        
+class Conv2dGradientXOp(Op):
+    def __call__(self, input, filter, grad, origin):
+        new_node = Op.__call__(self)
+        new_node.inputs = [input, filter, grad]
+        new_node.origin = origin
+        return new_node
+        
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 3
+        X = input_vals[0]
+        W = input_vals[1]
+        D = input_vals[2]
+        batch, in_h, in_w, in_ch = X.shape
+        fil_h, fil_w, in_ch, ou_ch = W.shape
+        batch, ou_h, ou_w, ou_ch = D.shape
+        strides = node.origin.strides
+        
+        if node.origin.padding == "SAME":
+            X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
+                                   (node.origin.pad_l, node.origin.pad_r), \
+                           (0, 0)), "constant")
+            _, in_h, in_w, _ = X.shape
+        
+        W_col = W.reshape((fil_h * fil_w * in_ch, ou_ch))
+        D_col = D.reshape((batch * ou_h * ou_w, ou_ch))
+        DX = np.zeros((batch, in_h, in_w, in_ch))
+        
+        for b in range(batch):
+            p = 0
+            subD_col = D_col[b * ou_h * ou_w : (b + 1) * ou_h * ou_w, :]
+            subDX_col = np.matmul(subD_col, W_col.T)
+            for i in range(ou_h):
+                q = 0
+                for j in range(ou_w):
+                    DX[b, p : p + fil_h, q : q + fil_w, :] += \
+                        subDX_col[i * ou_w + j, :].reshape((fil_h, fil_w, in_ch))
+                    q += strides[2]
+                p += strides[1]
+                
+        if node.origin.padding == "SAME":
+            DX = DX[:, node.origin.pad_t : in_h - node.origin.pad_b, \
+                       node.origin.pad_l : in_w - node.origin.pad_r, :]
+        output_val[:] = DX
+        
+    def gradient(self, node, output_grad):
+        assert False
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 3
+        return input_shapes[0]
+        
+        
+class Conv2dGradientWOp(Op):
+    def __call__(self, input, filter, grad, origin):
+        new_node = Op.__call__(self)
+        new_node.inputs = [input, filter, grad]
+        new_node.origin = origin
+        return new_node
+        
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 3
+        X = input_vals[0]
+        W = input_vals[1]
+        D = input_vals[2]
+        batch, in_h, in_w, in_ch = X.shape
+        fil_h, fil_w, in_ch, ou_ch = W.shape
+        batch, ou_h, ou_w, ou_ch = D.shape
+        strides = node.origin.strides
+        
+        if node.origin.padding == "SAME":
+            X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
+                                   (node.origin.pad_l, node.origin.pad_r), \
+                           (0, 0)), "constant")
+            _, in_h, in_w, _ = X.shape
+            
+        DW_col = np.zeros((fil_h * fil_w * in_ch, ou_ch))
+        subX_col = np.zeros((ou_h * ou_w, fil_h * fil_w * in_ch))
+        for b in range(batch):
+            subD_col = D[b].reshape((ou_h * ou_w, ou_ch))
+            p = 0
+            for i in range(ou_h):
+                q = 0
+                for j in range(ou_w):
+                    subX = X[b, p : p + fil_h, q : q + fil_w, :]
+                    subX_col[i * ou_w + j, :] = \
+                        subX.reshape((fil_h * fil_w * in_ch))
+                    q += strides[2]
+                p += strides[1]
+            DW_col[:] += np.matmul(subX_col.T, subD_col)
+        output_val[:] = DW_col.reshape((fil_h, fil_w, in_ch, ou_ch))
+        
+    def gradient(self, node, output_grad):
+        assert False
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 3
+        return input_shapes[1]
+    
+        
+class MaxPoolOp(Op):
+    def __call__(self, value, ksize, strides, padding):
+        new_node = Op.__call__(self)
+        new_node.inputs = [value]
+        new_node.ksize = ksize
+        new_node.strides = strides
+        new_node.padding = padding
+        return new_node
+        
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 1
+        X = input_vals[0]
+        batch, in_h, in_w, channels = X.shape
+        batch, ou_h, ou_w, channels = output_val.shape
+        ksize = node.ksize
+        strides = node.strides
+            
+        if node.padding == "SAME":
+            pad_h = (ou_h - 1) * strides[1] + ksize[1] - in_h
+            pad_w = (ou_w - 1) * strides[2] + ksize[2] - in_w
+            pad_t = node.pad_t = pad_h // 2
+            pad_b = node.pad_b = pad_h - pad_t
+            pad_l = node.pad_l = pad_w // 2
+            pad_r = node.pad_r = pad_w - pad_l
+            X = np.pad(X, ((0, 0), (pad_t, pad_b), (pad_l, pad_r), \
+                           (0, 0)), "constant")
+            _, in_h, in_w, _ = X.shape
+            
+        output_val[:] = np.zeros((batch, ou_h, ou_w, channels))
+        p = 0
+        for i in range(ou_h):
+            q = 0
+            for j in range(ou_w):
+                subX = X[:, p : p + ksize[1], q : q + ksize[2], :]
+                output_val[:, i, j, :] = np.amax(subX, axis = (1, 2))
+                q += strides[2]
+            p += strides[1]
+            
+    def gradient(self, node, output_grad):
+        return [maxpoolgradient_op(node.inputs[0], output_grad, node)]
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 1
+        batch, in_h, in_w, channels = input_shapes[0]
+        ksize = node.ksize
+        strides = node.strides
+        if node.padding == "VALID":
+            ou_h = ceil(1.00 * (in_h - ksize[1] + 1) / strides[1])
+            ou_w = ceil(1.00 * (in_w - ksize[2] + 1) / strides[2])
+        else:
+            ou_h = ceil(1.00 * in_h / strides[1])
+            ou_w = ceil(1.00 * in_w / strides[2])
+        return (batch, int(ou_h), int(ou_w), channels)
+        
+        
+class MaxPoolGradinetOp(Op):
+    def __call__(self, node_A, node_B, origin):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.origin = origin
+        return new_node
+    
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 2
+        X = input_vals[0]
+        D = input_vals[1]
+        batch, in_h, in_w, channels = X.shape
+        batch, ou_h, ou_w, channels = D.shape
+        ksize = node.origin.ksize
+        strides = node.origin.strides
+        
+        if node.origin.padding == "SAME":
+            X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
+                                   (node.origin.pad_l, node.origin.pad_r), \
+                           (0, 0)), "constant")
+            _, in_h, in_w, _ = X.shape
+            
+        output_val[:] = np.zeros((output_val.shape))
+        p = 0
+        for i in range(ou_h):
+            q = 0
+            for j in range(ou_w):
+                subX = X[:, p : p + ksize[1], q : q + ksize[2], :]
+                subo = output_val[:, p : p + ksize[1], q : q + ksize[2], :]
+                subo[:] += np.equal(subX, np.max(subX, axis = (1, 2), keepdims = True)) * \
+                           D[:, i : i + 1, j : j + 1, :]
+                q += strides[2]
+            p += strides[1]
+    
+    def gradient(self, node, output_grad):
+        assert False
+    
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
         return input_shapes[0]
 
 
@@ -631,6 +916,8 @@ constant_op = ConstantOp()
 
 init_op = InitOp()
 shape_op = ShapeOp()
+reshape_op = ReshapeOp()
+reshapeto_op = ReshapeToOp()
 assign_op = AssignOp()
 equal_op = EqualOp()
 argmax_op = ArgmaxOp()
@@ -652,6 +939,11 @@ reducesumto_op = ReduceSumToOp()
 broadcastto_op = BroadcastToOp()
 relu_op = ReluOp()
 relu_gradient_op = ReluGradientOp()
+conv2d_op = Conv2dOp()
+conv2dgradientx_op = Conv2dGradientXOp()
+conv2dgradientw_op = Conv2dGradientWOp()
+maxpool_op = MaxPoolOp()
+maxpoolgradient_op = MaxPoolGradinetOp()
 
     
 class Executor(object):
@@ -673,13 +965,15 @@ class Executor(object):
                 infer_shapes = []
                 for u in node.inputs:
                     infer_shapes.append(self.node_to_shape_map[u])
-                self.node_to_shape_map[node] = node.op.infer_shape(node, infer_shapes)
+                self.node_to_shape_map[node] = \
+                    node.op.infer_shape(node, infer_shapes)
 
     def memory_plan(self, feed_shapes):
         self.infer_shape(feed_shapes)
         self.node_to_arr_map = {}
         for node in self.topo_order:
-            self.node_to_arr_map[node] = ndarray.empty(self.node_to_shape_map[node], ctx = self.ctx)
+            self.node_to_arr_map[node] = \
+                ndarray.empty(self.node_to_shape_map[node], ctx = self.ctx)
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         def are_feed_shapes_equal(sa, sb):

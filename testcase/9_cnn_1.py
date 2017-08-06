@@ -25,10 +25,8 @@ y_ = tf.placeholder(tf.float32, shape=[None, 10])
 W_conv1 = weight_variable([5, 5, 1, 32])
 b_conv1 = bias_variable([32])
 x_image = tf.reshape(x, [-1, 28, 28, 1])
-
 h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
 h_pool1 = max_pool_2x2(h_conv1)
-
 # second layer
 W_conv2 = weight_variable([5, 5, 32, 64])
 b_conv2 = bias_variable([64])
@@ -66,13 +64,13 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     for i in range(200):
         batch = mnist.train.next_batch(100)
-        if i % 50 == 0:
+        if i % 10 == 0:
             train_accuracy = accuracy.eval(feed_dict = { x: batch[0],
                                            y_: batch[1]})
             print('Step %d, trainning accuracy %g' % (i, train_accuracy))
 
         train_step.run(feed_dict={x: batch[0], y_: batch[1]})
-
+    print("train done")
     ans = accuracy.eval(feed_dict={ x:mnist.test.images,
                                     y_: mnist.test.labels})
     print('Test accuracy: %g' % ans)
