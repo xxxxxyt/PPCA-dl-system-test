@@ -27,3 +27,5 @@ def max_pool(value, ksize, strides, padding):
     assert padding == "SAME" or padding == "VALID"
     return autodiff.maxpool_op(value, ksize, strides, padding)
     
+def dropout(input, keep_prob):
+    return autodiff.dropout_op(input, keep_prob)

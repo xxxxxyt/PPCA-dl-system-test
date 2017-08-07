@@ -907,6 +907,45 @@ class MaxPoolGradinetOp(Op):
     def infer_shape(self, node, input_shapes):
         assert len(input_shapes) == 2
         return input_shapes[0]
+        
+        
+class DropoutOp(Op):
+    def __call__(self, input, keep_prob):
+        new_node = Op.__call__(self)
+        new_node.inputs = [input, keep_prob]
+        return new_node
+    
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 2
+        arr = np.random.random(output_val.shape)
+        node.keep_status = arr <= input_vals[1]
+        output_val[:] = input_vals[0] * node.keep_status
+        
+    def gradient(self, node, output_grad):
+        return [dropoutgradient_op(output_grad, node), 0]
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 2
+        return input_shapes[0]
+        
+        
+class DropoutGradientOp(Op):
+    def __call__(self, grad, origin):
+        new_node = Op.__call__(self)
+        new_node.inputs = [grad]
+        new_node.origin = origin
+        return new_node
+        
+    def compute(self, node, input_vals, output_val, use_numpy = True):
+        assert len(input_vals) == 1
+        output_val[:] = input_vals[0] * node.origin.keep_status
+        
+    def gradient(self, node, output_grad):
+        assert False
+        
+    def infer_shape(self, node, input_shapes):
+        assert len(input_shapes) == 1
+        return input_shapes[0]
 
 
 # Create global singletons of operators.
@@ -944,6 +983,8 @@ conv2dgradientx_op = Conv2dGradientXOp()
 conv2dgradientw_op = Conv2dGradientWOp()
 maxpool_op = MaxPoolOp()
 maxpoolgradient_op = MaxPoolGradinetOp()
+dropout_op = DropoutOp()
+dropoutgradient_op = DropoutGradientOp()
 
     
 class Executor(object):
