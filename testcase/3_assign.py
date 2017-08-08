@@ -7,14 +7,14 @@ import numpy as np
 sess = tf.Session()
 
 # linear model
-W = tf.Variable([.5], dtype=tf.float32, name = "W")
-b = tf.Variable([1.5], dtype=tf.float32, name = "b")
-x = tf.placeholder(tf.float32, name = "x")
+W = tf.Variable([.5], dtype=tf.float32)
+b = tf.Variable([1.5], dtype=tf.float32)
+x = tf.placeholder(tf.float32)
 
 linear_model = W * x + b
 
 # define error
-y = tf.placeholder(tf.float32, name = "y")
+y = tf.placeholder(tf.float32)
 error = tf.reduce_sum(linear_model - y)
 
 # run init

@@ -16,5 +16,6 @@ see http://blog.csdn.net/largetalk/article/details/6910277
 with tf.Session() as sess:
     ans = sess.run(adder_node, {a: 3, b: 4.5})
     assert np.equal(ans, 7.5)
+
     ans = sess.run(adder_node, {a: [1, 3], b: [2, 3]})
     assert np.array_equal(ans, [3, 6])
