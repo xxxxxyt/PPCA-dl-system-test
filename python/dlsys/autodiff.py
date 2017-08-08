@@ -42,7 +42,7 @@ class Node(object):
     __rmul__ = __mul__
     def __str__(self):
         return self.name
-    def eval(self, feed_dict):
+    def eval(self, feed_dict = None):
         from .session import Session
         sess = Session()
         return sess.run(self, feed_dict)
@@ -593,10 +593,15 @@ class BroadcastToOp(Op):
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
         tmp = copy.deepcopy(input_vals[0])
-        input_shape = tmp.shape
+        input_shape = ()
         output_shape = input_vals[1].shape
-        for i in range(len(output_shape) - len(input_shape)):
-            input_shape = input_shape + (1,)
+        j = 0
+        for i in range(len(output_shape)):
+            if j < len(tmp.shape) and output_shape[i] == tmp.shape[j]:
+                input_shape = input_shape + (tmp.shape[j],)
+                j = j + 1
+            else:
+                input_shape = input_shape + (1,)
         tmp = tmp.reshape(input_shape)
         output_val[:] = np.broadcast_to(tmp, output_shape)
 
