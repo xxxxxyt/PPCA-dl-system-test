@@ -73,8 +73,8 @@ with tf.Session() as sess:
 
         train_step.run(feed_dict={x: batch[0], y_: batch[1]})
     
+    print("train done")
     ans = accuracy.eval(feed_dict={ x:mnist.test.images,
                                     y_: mnist.test.labels})
     print('Test accuracy: %g' % ans)
     assert ans > 0.88
-    
