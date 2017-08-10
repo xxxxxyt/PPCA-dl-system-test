@@ -27,8 +27,8 @@ def main(model_name):
         os.system("cp %s %s" % (os.path.join(testcase_dir, file_name),
                                                     file_name))
         os.system("sed -i 's/your_model/%s/' %s" % (model_name, file_name))
-        #ret = os.system("%s %s" % (python_cmd, file_name))
-        ret = os.system("%s -m cProfile -s cumtime %s > %s.out" % (python_cmd, file_name, file_name))
+        ret = os.system("%s %s" % (python_cmd, file_name))
+        #ret = os.system("%s -m cProfile -s cumtime %s > %s.out" % (python_cmd, file_name, file_name))
         if ret != 0:
             exit(0)
         os.system("rm %s" % (file_name))

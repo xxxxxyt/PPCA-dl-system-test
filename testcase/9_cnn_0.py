@@ -73,6 +73,6 @@ if __name__ == "__main__":
     for item in testcases:
         res = item(act_tf)
         ans = item(ans_tf)
-
+        print(item)
         np.testing.assert_allclose(res, ans, atol=1e-2)
 

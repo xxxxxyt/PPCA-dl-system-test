@@ -10,11 +10,11 @@ def constant(init, shape):
     x[:] = init
     return x
 
-def placeholder(dtype = float32, shape = None, name = ""):
-    return autodiff.placeholder_op(name = name)
+def placeholder(dtype = float32, shape = None):
+    return autodiff.placeholder_op()
 
-def Variable(init = None, dtype = float32, name = ""):
-    v = autodiff.variable_op(name = name)
+def Variable(init = None, dtype = float32):
+    v = autodiff.variable_op()
     if init is not None:
         if not isinstance(init, np.ndarray):
             if not isinstance(init, list):

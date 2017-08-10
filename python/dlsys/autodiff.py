@@ -10,7 +10,6 @@ use_cpp = True
 
 class Node(object):
     def __init__(self):
-        self.name = ""
         self.inputs = []
         self.op = None
     def __neg__(self):
@@ -43,8 +42,6 @@ class Node(object):
         return other * self.inv()
     __radd__ = __add__
     __rmul__ = __mul__
-    def __str__(self):
-        return self.name
     def eval(self, feed_dict = None):
         from .session import Session
         sess = Session()
@@ -68,22 +65,20 @@ class Op(object):
 
         
 class PlaceholderOp(Op):
-    def __call__(self, name = ""):
+    def __call__(self):
         new_node = Op.__call__(self)
-        new_node.name = name
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
-        assert False, "placeholder %s values provided by feed_dict" % node.name
+        assert False, "placeholder values provided by feed_dict"
     def gradient(self, node, output_grad):
         return None
     def infer_shape(self, node, input_shapes):
-        assert False, "placeholder %s shape provided by feed_shape" % node.name
+        assert False, "placeholder shape provided by feed_shape"
 
         
 class VariableOp(Op):
-    def __call__(self, name = ""):
+    def __call__(self):
         new_node = Op.__call__(self)
-        new_node.name = name
         # wait value from assign node
         new_node.value = None
         return new_node
@@ -102,7 +97,6 @@ class VariableOp(Op):
 class ConstantOp(Op):
     def __call__(self, const_val):
         new_node = Op.__call__(self)
-        new_node.name = str(const_val)
         const_val = cast_to_ndarray(const_val)
         new_node.const_attr = const_val
         return new_node
@@ -122,7 +116,6 @@ class ConstantOp(Op):
 class InitOp(Op):
     def __call__(self, input_nodes):
         new_node = Op.__call__(self)
-        new_node.name = "(init node)"
         new_node.inputs = input_nodes
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -138,7 +131,6 @@ class ShapeOp(Op):
         if not isinstance(reduction_indices, list):
             reduction_indices = [0]
         new_node = Op.__call__(self)
-        new_node.name = "shape(%s)[%s]" % (node.name, str(reduction_indices))
         new_node.inputs = [node]
         new_node.reduction_indices = reduction_indices
         return new_node
@@ -160,7 +152,6 @@ class ShapeOp(Op):
 class ReshapeOp(Op):
     def __call__(self, node, shape):
         new_node = Op.__call__(self)
-        new_node.name = "reshape(%s,%s)" % (node.name, str(shape))
         new_node.inputs = [node]
         new_node.to_shape = shape
         return new_node
@@ -189,7 +180,6 @@ class ReshapeToOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "reshapeto(%s,%s)" % (node_A.name, node_B.name)
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
@@ -212,7 +202,6 @@ class AssignOp(Op):
         new_node.inputs = [input_node]
         # give value to variable from const node
         new_node.assign_to = assign_node
-        new_node.name = "(%s=%s)" % (assign_node.name, input_node.name)
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
@@ -229,7 +218,6 @@ class EqualOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "(%s==%s)" % (node_A.name, node_B.name)
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
@@ -247,7 +235,6 @@ class ArgmaxOp(Op):
     def __call__(self, node, reduction_indices):
         new_node = Op.__call__(self)
         new_node.inputs = [node]
-        new_node.name = "argmax(%s)[%d]" % (node.name, reduction_indices)
         new_node.reduction_indices = reduction_indices
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -268,7 +255,6 @@ class PowerOp(Op):
             node_B = constant_op(node_B)
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "(%s^%s)" % (node_A.name, node_B.name)
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
@@ -287,7 +273,6 @@ class ExpOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
         new_node.inputs = [node]
-        new_node.name = "exp(%s)" % node.name
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
@@ -303,7 +288,6 @@ class LogOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
         new_node.inputs = [node]
-        new_node.name = "log(%s)" % node.name
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
@@ -319,7 +303,6 @@ class NegOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
         new_node.inputs = [node]
-        new_node.name = "(-%s)" % node.name
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
@@ -335,7 +318,6 @@ class InvOp(Op):
     def __call__(self, node):
         new_node = Op.__call__(self)
         new_node.inputs = [node]
-        new_node.name = "(1/%s)" % node.name
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
@@ -351,7 +333,6 @@ class AddOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "(%s+%s)" % (node_A.name, node_B.name)
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -371,7 +352,6 @@ class MulOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "(%s*%s)" % (node_A.name, node_B.name)
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -393,8 +373,6 @@ class MatMulOp(Op):
         new_node.matmul_attr_trans_A = trans_A
         new_node.matmul_attr_trans_B = trans_B
         new_node.inputs = [node_A, node_B]
-        new_node.name = "MatMul(%s,%s,%s,%s)" % (
-            node_A.name, node_B.name, str(trans_A), str(trans_B))
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -487,12 +465,11 @@ class ZerosLikeOp(Op):
     def __call__(self, node_A):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
-        new_node.name = "Zeroslike(%s)" % node_A.name
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        output_val[:] = np.zeros(input_vals[0].shape)
+        output_val[:] = 0
 
     def gradient(self, node, output_grad):
         return [zeroslike_op(node.inputs[0])]
@@ -512,12 +489,11 @@ class OnesLikeOp(Op):
         """Creates a node that represents np.ones(node_A.shape)."""
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
-        new_node.name = "Oneslike(%s)" % node_A.name
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        output_val[:] = np.ones(input_vals[0].shape)
+        output_val[:] = 1
 
     def gradient(self, node, output_grad):
         return [zeroslike_op(node.inputs[0])]
@@ -537,7 +513,6 @@ class ReduceSumOp(Op):
         assert isinstance(reduction_indices, int)
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
-        new_node.name = "ReduceSum(%s)[%d]" % (node_A.name, reduction_indices)
         new_node.reduction_indices = reduction_indices
         new_node.keepdims = keepdims
         return new_node
@@ -577,7 +552,6 @@ class ReduceSumToOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "ReduceSumTo(%s,%s.shape)" % (node_A.name, node_B.name)
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
@@ -610,7 +584,6 @@ class BroadcastToOp(Op):
         """
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "BroadcastTo(%s,%s.shape)" % (node_A.name, node_B.name)
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -642,7 +615,6 @@ class ReluOp(Op):
     def __call__(self, node_A):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A]
-        new_node.name = "Relu(%s)" % (node_A.name)
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -661,7 +633,6 @@ class ReluGradientOp(Op):
     def __call__(self, node_A, node_B):
         new_node = Op.__call__(self)
         new_node.inputs = [node_A, node_B]
-        new_node.name = "ReluGradient(%s)" % (node_A.name)
         return new_node
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
@@ -704,6 +675,7 @@ class Conv2dOp(Op):
             pad_r = node.pad_r = pad_w - pad_l
             X = np.pad(X, ((0, 0), (pad_t, pad_b), (pad_l, pad_r), \
                            (0, 0)), "constant")
+            node.X_pad = X
             _, in_h, in_w, _ = X.shape
         
         if not use_cpp:
@@ -723,7 +695,7 @@ class Conv2dOp(Op):
                 output_val[b, :] = subY_col.reshape((ou_h, ou_w, ou_ch))
         else:
             #print("python: compute conv2d")
-            Y = np.zeros((output_val.shape)).astype(np.float32)
+            Y = np.zeros(output_val.shape).astype(np.float32)
             X = X.astype(np.float32)
             W = W.astype(np.float32)
             Y_data = Y.ctypes.data_as(POINTER(c_float))
@@ -777,9 +749,12 @@ class Conv2dGradientXOp(Op):
         strides = node.origin.strides
         
         if node.origin.padding == "SAME":
+            """
             X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
                                    (node.origin.pad_l, node.origin.pad_r), \
                            (0, 0)), "constant")
+            """
+            X = node.origin.X_pad
             _, in_h, in_w, _ = X.shape
         
         if not use_cpp:
@@ -846,9 +821,12 @@ class Conv2dGradientWOp(Op):
         strides = node.origin.strides
         
         if node.origin.padding == "SAME":
+            """
             X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
                                    (node.origin.pad_l, node.origin.pad_r), \
                            (0, 0)), "constant")
+            """
+            X = node.origin.X_pad
             _, in_h, in_w, _ = X.shape
             
         if not use_cpp:
@@ -869,7 +847,7 @@ class Conv2dGradientWOp(Op):
             output_val[:] = DW_col.reshape((fil_h, fil_w, in_ch, ou_ch))
         else:
             #print("python: compute conv2d_gradient_w")
-            DW = np.zeros((output_val.shape)).astype(np.float32)
+            DW = np.zeros(output_val.shape).astype(np.float32)
             X = X.astype(np.float32)
             D = D.astype(np.float32)
             DW_data = DW.ctypes.data_as(POINTER(c_float))
@@ -919,9 +897,10 @@ class MaxPoolOp(Op):
             pad_r = node.pad_r = pad_w - pad_l
             X = np.pad(X, ((0, 0), (pad_t, pad_b), (pad_l, pad_r), \
                            (0, 0)), "constant")
+            node.X_pad = X
             _, in_h, in_w, _ = X.shape
             
-        output_val[:] = np.zeros((batch, ou_h, ou_w, channels))
+        output_val[:] = 0
         p = 0
         for i in range(ou_h):
             q = 0
@@ -965,12 +944,15 @@ class MaxPoolGradinetOp(Op):
         strides = node.origin.strides
         
         if node.origin.padding == "SAME":
+            """
             X = np.pad(X, ((0, 0), (node.origin.pad_t, node.origin.pad_b), \
                                    (node.origin.pad_l, node.origin.pad_r), \
                            (0, 0)), "constant")
+            """
+            X = node.origin.X_pad
             _, in_h, in_w, _ = X.shape
             
-        output_val[:] = np.zeros((output_val.shape))
+        output_val[:] = 0
         p = 0
         for i in range(ou_h):
             q = 0
@@ -1090,13 +1072,6 @@ class Executor(object):
                 self.node_to_shape_map[node] = \
                     node.op.infer_shape(node, infer_shapes)
 
-    def memory_plan(self, feed_shapes):
-        self.infer_shape(feed_shapes)
-        self.node_to_arr_map = {}
-        for node in self.topo_order:
-            self.node_to_arr_map[node] = \
-                ndarray.empty(self.node_to_shape_map[node], ctx = self.ctx)
-
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         def are_feed_shapes_equal(sa, sb):
             if (not isinstance(sa, dict)) or (not isinstance(sb, dict)):
@@ -1108,18 +1083,9 @@ class Executor(object):
         use_numpy = self.ctx is None
         node_to_val_map = {}
         for node, value in feed_dict.items():
-            if use_numpy:
-                # all values passed in feed_dict must be np.ndarray
-                assert isinstance(value, np.ndarray)
-                node_to_val_map[node] = value
-            else:
-                # convert values to ndarray.NDArray if necessary
-                if isinstance(value, np.ndarray):
-                    node_to_val_map[node] = ndarray.array(value, ctx=self.ctx)
-                elif isinstance(value, ndarray.NDArray):
-                    node_to_val_map[node] = value
-                else:
-                    assert False, "feed_dict value type not supported"
+            # all values passed in feed_dict must be np.ndarray
+            assert isinstance(value, np.ndarray)
+            node_to_val_map[node] = value
 
         # collect shapes for all placeholders
         feed_shapes = {}
@@ -1131,9 +1097,6 @@ class Executor(object):
         if (not are_feed_shapes_equal(feed_shapes, self.feed_shapes)):
             self.infer_shape(feed_shapes)
             self.feed_shapes = feed_shapes
-            # plan memory if using GPU
-            if (not use_numpy):
-                self.memory_plan(feed_shapes)
 
         # Traverse graph in topo order and compute values for all nodes.
         for node in self.topo_order:
@@ -1141,19 +1104,12 @@ class Executor(object):
                 # Skip placeholder nodes. Values already provided by feed_dict.
                 continue
             input_vals = [node_to_val_map[n] for n in node.inputs]
-            if use_numpy:
-                node_val = np.empty(shape=self.node_to_shape_map[node])
-            else:
-                node_val = self.node_to_arr_map[node]
+            node_val = np.empty(shape=self.node_to_shape_map[node])
             # node_val is modified in-place whether np.ndarray or NDArray
-            #print(type(node.op))
             node.op.compute(node, input_vals, node_val, use_numpy)
-            #print(type(node.op), "done")
             node_to_val_map[node] = node_val
         
         # Collect node values.
-        if not use_numpy and convert_to_numpy_ret_vals:
-            return [node_to_val_map[n].asnumpy() for n in self.eval_node_list]
         return [node_to_val_map[n] for n in self.eval_node_list]
 
 
