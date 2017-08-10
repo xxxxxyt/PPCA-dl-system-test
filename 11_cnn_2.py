@@ -1,5 +1,5 @@
 """ import your model here """
-import your_model as tf
+import dlsys as tf
 """ your model should support the following code """
 
 def weight_variable(shape):
@@ -75,7 +75,6 @@ with tf.Session() as sess:
             print('step %d, trainning accuracy %g' % (i, train_accuracy))
 
         train_step.run(feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
-    """
     print("train done")
     """
     ans = accuracy.eval(feed_dict={ x:mnist.test.images,
