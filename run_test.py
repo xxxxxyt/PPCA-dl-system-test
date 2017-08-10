@@ -4,16 +4,16 @@ import sys
 python_cmd = "python"
 testcase_dir = "testcase"
 tests = [
-    ["adder",       "1_adder.py"],
-    ["initializer", "2_init.py"],
-    ["assign",      "3_assign.py"],
-    ["context",     "4_context.py"],
-    ["autodiff",    "5_mnist_grad.py"],
-    ["optimizer",   "6_mnist_optimizer.py"],
-    ["multilayer perceptron", "7_ml_perceptron.py"],
-    ["adam optimizer",        "8_adam.py"],
-    ["CNN 0",       "9_cnn_0.py"],
-    ["CNN 1",       "10_cnn_1.py"],
+    #["adder",       "1_adder.py"],
+    #["initializer", "2_init.py"],
+    #["assign",      "3_assign.py"],
+    #["context",     "4_context.py"],
+    #["autodiff",    "5_mnist_grad.py"],
+    #["optimizer",   "6_mnist_optimizer.py"],
+    #["multilayer perceptron", "7_ml_perceptron.py"],
+    #["adam optimizer",        "8_adam.py"],
+    #["CNN 0",       "9_cnn_0.py"],
+    #["CNN 1",       "10_cnn_1.py"],
     ["CNN 2",       "11_cnn_2.py"]
 ]
 
