@@ -1071,6 +1071,12 @@ class Executor(object):
                     infer_shapes.append(self.node_to_shape_map[u])
                 self.node_to_shape_map[node] = \
                     node.op.infer_shape(node, infer_shapes)
+    
+    def memory_plan(self, feed_shapes):
+        self.infer_shape(feed_shapes)
+        self.node_to_arr_map = {}
+        for node in self.topo_order:
+            self.node_to_arr_map[node] = np.empty(self.node_to_shape_map[node])
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         def are_feed_shapes_equal(sa, sb):
@@ -1083,9 +1089,18 @@ class Executor(object):
         use_numpy = self.ctx is None
         node_to_val_map = {}
         for node, value in feed_dict.items():
-            # all values passed in feed_dict must be np.ndarray
-            assert isinstance(value, np.ndarray)
-            node_to_val_map[node] = value
+            if use_numpy:
+                # all values passed in feed_dict must be np.ndarray
+                assert isinstance(value, np.ndarray)
+                node_to_val_map[node] = value
+            else:
+                # convert values to ndarray.NDArray if necessary
+                if isinstance(value, np.ndarray):
+                    node_to_val_map[node] = ndarray.array(value, ctx=self.ctx)
+                elif isinstance(value, ndarray.NDArray):
+                    node_to_val_map[node] = value
+                else:
+                    assert False, "feed_dict value type not supported"
 
         # collect shapes for all placeholders
         feed_shapes = {}
@@ -1097,6 +1112,7 @@ class Executor(object):
         if (not are_feed_shapes_equal(feed_shapes, self.feed_shapes)):
             self.infer_shape(feed_shapes)
             self.feed_shapes = feed_shapes
+            self.memory_plan(feed_shapes)
 
         # Traverse graph in topo order and compute values for all nodes.
         for node in self.topo_order:
@@ -1104,11 +1120,11 @@ class Executor(object):
                 # Skip placeholder nodes. Values already provided by feed_dict.
                 continue
             input_vals = [node_to_val_map[n] for n in node.inputs]
-            node_val = np.empty(shape=self.node_to_shape_map[node])
+            node_val = self.node_to_arr_map[node]
             # node_val is modified in-place whether np.ndarray or NDArray
             node.op.compute(node, input_vals, node_val, use_numpy)
             node_to_val_map[node] = node_val
-        
+
         # Collect node values.
         return [node_to_val_map[n] for n in self.eval_node_list]
 
