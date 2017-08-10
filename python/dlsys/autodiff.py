@@ -103,7 +103,7 @@ class ConstantOp(Op):
         new_node = Op.__call__(self)
         new_node.name = str(const_val)
         const_val = cast_to_ndarray(const_val)
-        new_node.const_attr = copy.deepcopy(const_val)
+        new_node.const_attr = const_val
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 0
@@ -215,7 +215,7 @@ class AssignOp(Op):
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 1
-        node.assign_to.value = copy.deepcopy(input_vals[0])
+        node.assign_to.value = input_vals[0]
         output_val[:] = input_vals[0]
     def gradient(self, node, output_grad):
         assert False, "no gradient for assign node"
@@ -580,13 +580,13 @@ class ReduceSumToOp(Op):
         return new_node
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
-        tmp = copy.deepcopy(input_vals[0])
+        tmp = input_vals[0]
         input_shape = input_vals[0].shape
         output_shape = input_vals[1].shape
         for i in range(len(output_shape)):
             while(i < len(tmp.shape) and 
                 tmp.shape[i] != output_shape[i]):
-                tmp = copy.deepcopy(np.sum(tmp, axis = i))
+                tmp = np.sum(tmp, axis = i)
         while len(tmp.shape) < len(output_shape):
             tmp = tmp.reshape(tmp.shape + (1,))
         output_val[:] = tmp
@@ -614,7 +614,7 @@ class BroadcastToOp(Op):
 
     def compute(self, node, input_vals, output_val, use_numpy = True):
         assert len(input_vals) == 2
-        tmp = copy.deepcopy(input_vals[0])
+        tmp = input_vals[0]
         input_shape = ()
         output_shape = input_vals[1].shape
         j = 0
