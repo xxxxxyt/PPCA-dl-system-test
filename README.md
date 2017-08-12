@@ -29,3 +29,4 @@ python run_test.py tensorflow
 # Before run test
 
 execute all the content in `path.sh` and build with `make.sh`
+need `openblas-dev`
