@@ -1077,7 +1077,8 @@ class Executor(object):
         self.infer_shape(feed_shapes)
         self.node_to_arr_map = {}
         for node in self.topo_order:
-            self.node_to_arr_map[node] = np.empty(self.node_to_shape_map[node])
+            self.node_to_arr_map[node] = \
+                np.empty(shape = self.node_to_shape_map[node])
 
     def run(self, feed_dict, convert_to_numpy_ret_vals=False):
         def are_feed_shapes_equal(sa, sb):
